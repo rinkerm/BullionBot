@@ -1,3 +1,4 @@
 .env
 *.session
-*.json
+config.json
+channel_messages.json
