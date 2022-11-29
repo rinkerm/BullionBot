@@ -2,3 +2,6 @@
 *.session
 config.json
 channel_messages.json
+ChatBot/Images/*
+ChatBot/Logs/*
+!ChatBot/Logs/sample.csv

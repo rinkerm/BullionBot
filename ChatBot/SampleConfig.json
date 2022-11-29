@@ -1,18 +1,5 @@
 {
 	"api_key":"1111111111:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
 	"whitelist":[111111111],
-	"messages":{
-		"payments":{
-			"Zelle":["EMAIL","COMPANY NAME"],
-			"Venmo":"@ACCOUNT",
-			"Paypal":"EMAIL",
-			"Check":["COMPANY NAME","EMAIL"]
-		},
-		"general":{
-			"Sales":["@USER","@USER"],
-			"Requests":["@USER"],
-			"Invoices":["@USER"],
-			"Team":["@USER","@USER"]
-		}
-	}
+	"welcome_message":2
 }

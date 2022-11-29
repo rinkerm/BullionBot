@@ -1,42 +1,59 @@
-import os
-import telebot
-import configparser
+from bs4 import BeautifulSoup
+from datetime import datetime
 import json
 import re
-import datetime
-
+import requests
+import telebot
+from telebot.types import InputFile
 #Declare Globals
 global BIN_LOG 
-global config_data
+global CONFIG_DATA
+global KITCO 
 global WHITELIST
+
+
+KITCO = 'http://www.kitco.com/market/'
 
 #Load Config
 config = open('config.json')
-config_data = json.load(config)
+CONFIG_DATA = json.load(config)
 
 #Initialize Globals/Api Key
-API_KEY = config_data['api_key']
-WHITELIST = config_data['whitelist']
+API_KEY = CONFIG_DATA['api_key']
+WHITELIST = CONFIG_DATA['whitelist']
 BIN_LOG = []
 
 #Initialize Bot
 bot = telebot.TeleBot(API_KEY)
 
 #Helper Functions
-def list_to_formatted_string(x, delim):
-	formatted = ''
-	if len(x) == 1:
-		formatted = x[0]
-	else:
-		for i in range(0,len(x)-1):
-			formatted += x[i] + ', '
-		formatted += delim + ' ' + x[len(x)-1]		
-	return formatted
-
+		
+def get_spot():
+	#Declare Globals
+	global KITCO
+	
+	#Scrape Kitco Spot
+	try:
+		wr = requests.get(KITCO)
+	except Exception as e:
+		bot.reply_to(message, "Error: Unable to access KITCO Spot Price")
+		return
+	content = wr.content
+	
+	#Parse Data
+	soup = BeautifulSoup(content, features ='lxml')
+	metalList = ['GOLD','SILVER','PLATINUM','PALLADIUM']
+	priceList = [soup.find('td',id="AU-ask").contents[0],
+		soup.find('td',id="AG-ask").contents[0],
+		soup.find('td',id="PT-ask").contents[0],
+		soup.find('td',id="PD-ask").contents[0]]
+			
+	return metalList, priceList
+	
 #General Commands
 
-@bot.message_handler(commands=['bin'])
-def bin(message):
+def binn(message):
+
 	global BIN_LOG
 	if re.search('^\/bin \d+$',message.text) == None:
 		bot.reply_to(message, 'Error: Usage "/bin #"')
@@ -44,8 +61,8 @@ def bin(message):
 	if message.reply_to_message == None:
 		bot.reply_to(message, 'Please submit your bin in reply to a listing')
 		return
-	if message.reply_to_message .text == None:
-		if message.reply_to_message .caption == None:
+	if message.reply_to_message.text == None:
+		if message.reply_to_message.caption == None:
 			bot.reply_to(message, 'Please submit your bin in reply to a listing')
 			return
 		else:
@@ -53,12 +70,67 @@ def bin(message):
 	else:
 		listing = message.reply_to_message.text.split('\n')[0]
 		
-	name = message.from_user.first_name + ' ' + message.from_user.last_name
+	name = message.from_user.username
 	count = message.text[4:]
-	date = str(datetime.datetime.fromtimestamp(message.date))
-	binText = name + ' ' + count + ' ' + listing + ' @' + date
+	date = str(datetime.fromtimestamp(message.date))
+	binText = name + ', ' + count + ', ' + listing + ', ' + date + ', N/A' 
 	BIN_LOG.append(binText)
 	bot.reply_to(message, 'Bin Recorded')
+
+def spot(message):
+	
+	metalList, priceList = get_spot()
+			
+	#Build Response
+	now = datetime.now().strftime("%m/%d/%Y %H:%M:%S")
+	response = "Kitco Spot Prices @ {0}".format(now)
+	for i in range(0,len(metalList)):
+		response += "\n\n {0}:\t\t${1}".format(metalList[i],priceList[i])
+	bot.reply_to(message,response)
+
+@bot.message_handler(commands=['bin','spot'])
+def spotbin (message):
+	global BIN_LOG
+	
+	if re.search('/bin',message.text) == None:
+		spot(message)
+	elif re.search('/spot',message.text) == None:
+		binn(message)
+	else:
+		if re.search('^\/bin \d+ \/spot$',message.text) == None:
+			bot.reply_to(message, 'Error: Usage "/bin # /spot"')
+			return
+		if message.reply_to_message == None:
+			bot.reply_to(message, 'Please submit your bin in reply to a listing')
+			return
+		if message.reply_to_message.text == None:
+			if message.reply_to_message.caption == None:
+				bot.reply_to(message, 'Please submit your bin in reply to a listing')
+				return
+			else:
+				listing = message.reply_to_message.caption.split('\n')[0]
+		else:
+			listing = message.reply_to_message.text.split('\n')[0]
+			
+		name = message.from_user.username
+		count = message.text[4:]
+		date = str(datetime.fromtimestamp(message.date))
+		
+		#Build Spot String
+		metalList,priceList = get_spot()
+		if metalList is None or priceList is None:
+			return
+			
+		#Build Response
+		now = datetime.now().strftime("%m/%d/%Y %H:%M:%S")
+		spot_str = "Kitco Spot Prices @ {0}".format(now)
+		for i in range(0,len(metalList)):
+			spot_str += "| {0}: ${1}".format(metalList[i],priceList[i])
+			
+		binText = name + ', ' + count + ', ' + listing + ', ' + date + ', ' + spot_str
+		BIN_LOG.append(binText)
+		bot.reply_to(message, 'Spot Bin Recorded')
+	
 
 #Admin Commands
 @bot.message_handler(commands=['getBins'])
@@ -83,15 +155,24 @@ def getBins(message):
 	temp_bin_log = BIN_LOG
 	BIN_LOG = []
 	
-	#Send Response
+	#Write to csv
+	
+	now = datetime.now().strftime("%d%m%Y_%H%M%S")
+	filename = 'Logs/' + now + '.csv'
+	
+	f = open(filename,'x')
+	
 	for entry in temp_bin_log:
-		bot.send_message(message.from_user.id,entry,disable_notification=True)
+		f.write(entry + '\n')
+	f.close()
+	
+	bot.send_message(message.from_user.id,'Success! Output file location: ' + filename)
 
 @bot.message_handler(commands=['reloadConfig'])
 def reloadConfig(message):
 	
 	#Declare Globals
-	global config_data
+	global CONFIG_DATA
 	global WHITELIST
 	
 	#Validate Parameters
@@ -104,8 +185,8 @@ def reloadConfig(message):
 	
 	#Reload Config JSON
 	config = open('config.json')
-	config_data = json.load(config)
-	WHITELIST = config_data['whitelist']
+	CONFIG_DATA = json.load(config)
+	WHITELIST = CONFIG_DATA['whitelist']
 	
 	#Send Response
 	bot.reply_to(message,'Config Reloaded',disable_notification=True)
@@ -125,72 +206,67 @@ def adminHelp(message):
 		return 
 		
 	#Build Response
-	response = 'Admin Commands: \n'
-	response += '"/getBins" \t\t| Retrieve recorded bins\n'
+	response= 'Admin Commands\n==========================\n'
+	response += '"/getBins" \t\t| Dump recorded bins to .csv\n'
 	response += '"/reloadConfig" \t\t| Reload Config File\n'
 	response += '"/adminHelp" \t\t| Display Admin Commands'
 	
 	bot.reply_to(message,response)
 	
 #Info Commands
+
+@bot.message_handler(commands=['airtites'])
+def airtites(message):
+	bot.send_photo(message.chat.id,InputFile('Images/airtite.jpg'), reply_to_message_id = message.id)
+
+@bot.message_handler(commands=['buyback'])
+def buyback(message):
+	bot.send_photo(message.chat.id,InputFile('Images/buyback.jpg'), reply_to_message_id = message.id)
+
 @bot.message_handler(commands=['payments'])
 def payments(message):
 
-	#Declare Globals
-	global config_data
-	
-	#Build Response
-	response = 'Payment Methods:\n\n'
-	response += 'Zelle: ' + config_data['messages']['payments']['Zelle'][0] + ' (' + config_data['messages']['payments']['Zelle'][1] + ')\n\n'
-	response += 'Venmo: ' + config_data['messages']['payments']['Venmo'] + ' +1.9% GS Added to total\n\n'
-	response += 'Paypal: ' + config_data['messages']['payments']['Paypal'] + ' +3.5% GS Added to total\n\n'
-	response += 'Credit Card: Visa/Mastercard/Amex/Discover +3.5% GS Added to total\n\n'
-	response += 'Money Order, Wire, & Check: Direct Message For Details\n\n'
-	response += 'Deluxe eCheck: ' + config_data['messages']['payments']['Check'][0] + ' ' + config_data['messages']['payments']['Check'][1]  + '\n\n'
-	response += 'Mobile Check: Front/Back Picture (In Focus on Dark Background)\nTo: ' + config_data['messages']['payments']['Check'][0] + '\nEmail to: ' + config_data['messages']['payments']['Check'][1]
-	
-	bot.reply_to(message,response)
+	bot.send_photo(message.chat.id,InputFile('Images/payments.jpg'), reply_to_message_id = message.id)
+
+@bot.message_handler(commands=['policy'])
+def policy(message):
+
+	bot.send_photo(message.chat.id,InputFile('Images/policy.jpg'), reply_to_message_id = message.id)
 
 @bot.message_handler(commands=['shipping'])
 def shipping(message):
 
-	#Declare Globals
-	global config_data
-	
-	#Build Response
-	response = 'Shipping and Packing: \n\n'
-	response += 'USPS: \n $5 First Class (Less Than 8oz)\n $9 Flat Rate Small (No Weight Limit)*\n $15 Flat Rate Medium\n $20 Flat Rate Large\n -*USPS Weight Limits are determined by Tetris Skills. For Reference can usually fit a very large Amount (150+oz) in the $9 Priority Box.\n\n'
-	response += 'UPS: \n $12 Flat Rate Small\n $18 Flat Rate Medium\n +$6 Signature Verification\n\n'
-	response += 'Fedex: \n Available by Request\n\n'
-	response += 'Note: \n First Class Packages Are Insured for $100 until marked delivered.\n Priority USPS and UPS are insured fully until marked delivered.\n Any package valued at $10,000+ MUST be shipped UPS or Fedex'
-	
-	bot.reply_to(message,response)
+	bot.send_photo(message.chat.id,InputFile('Images/shipping.jpg'), reply_to_message_id = message.id)
 
 @bot.message_handler(commands=['team'])
 def team(message):
 
-	#Declare Globals
-	global config_data
+	bot.send_photo(message.chat.id,InputFile('Images/info.jpg'), reply_to_message_id = message.id)
+
+@bot.message_handler(commands=['welcome'])
+def welcome(message):
+
+	global CONFIG_DATA
 	
-	#Build Response
-	response = 'Company Info: \n\n'
-	response+= 'Sales Posts: \n -Only Posted By: ' + list_to_formatted_string(config_data['messages']['general']['Sales'], 'and')+ '\n\n'
-	response+= 'Any Requests: \n -Tag Or DM ' + list_to_formatted_string(config_data['messages']['general']['Requests'], '') + '\n\n'
-	response+= 'Invoices: \n -Come From ' + list_to_formatted_string(config_data['messages']['general']['Invoices'], 'and')+ '\n -Roughly 1 Day After Processing Bins\n -Please Pay Promptly, Keeps Inventory Fresh\n -Indicate Keep Box Open/Close\n -Send Pay Screenshots to Invoicer' + '\n\n'
-	response+= 'Admins: \n -Veteran Members of the Community\n -Help Newcomers and Keep Chat Clean\n\n'
-	response+= 'CAUTION: \n if you receive Purchase Offers or Invoice Requests From Anyone Besides ' + list_to_formatted_string(config_data['messages']['general']['Team'], 'or') + ' Contact an Admin/Employee Immediately Please!'
-	
-	bot.reply_to(message, response)
+	bot.send_message(message.chat.id,'Welcome! Please see the linked message for some info on how this all works.',reply_to_message_id = CONFIG_DATA['welcome_message'])
 
 @bot.message_handler(commands= ['help'])
 def help(message):
 
 	#Build Response
-	response = 'Bot Commands:\n'
+	response = 'General Commands\n==========================\n'
 	response += '"/bin #" \t\t| Used to record a bin\n'
-	response += '"/team" \t\t| Display Company Info\n'
-	response += '"/shipping" \t\t| Display Shipping and Packing Info\n'
+	response += '"/bin # /spot" \t\t| Used to record a bin w/spot price\n'
+	response += '"/spot" \t\t| Display Kitco Spot Prices\n'
+	response+= '\nInformational Commands\n==========================\n'
+	response += '"/airtites" \t\t| Display Info about Airtites and Tubes\n'
+	response += '"/buyback" \t\t| Display Buyback Program Info\n'
 	response += '"/payments" \t\t| Display Payment Method Info\n'
+	response += '"/policy" \t\t| Display Company Policy Info\n'
+	response += '"/shipping" \t\t| Display Shipping and Packing Info\n'
+	response += '"/team" \t\t| Display Company Info\n'
+	response += '"/welcome" \t\t| Link Welcome Message\n'
+	response+= '\nHelp Commands\n==========================\n'
 	response += '"/adminHelp \t\t| Display Admin Commands\n'
 	response += '"/help" \t\t| Display Commands'
 	bot.reply_to(message, response)
@@ -209,6 +285,29 @@ def auth(message):
 	#Print username and id to console
 	#Intended to grab id for adding to whitelist
 	print(message.from_user.username,message.from_user.id)
+
+@bot.message_handler(commands=['debugGetBins'])
+def debugGetBins(message):
+	
+	#Declare Globals
+	global BIN_LOG
+	
+	#Validate Parameters
+	if len(BIN_LOG) == 0:
+		bot.send_message(message.from_user.id,'No Bins recorded',disable_notification=True)
+		return
+	
+	#Reset Bin Log
+	temp_bin_log = BIN_LOG
+	BIN_LOG = []
+	
+	#Send Response
+	for entry in temp_bin_log:
+		bot.send_message(message.chat.id,entry,disable_notification=True)
+
+@bot.message_handler(commands=['get_reply_id'])
+def getreplyid(message):
+	print(message.reply_to_message.id)
 
 #Listen for Commands
 bot.polling()
