@@ -217,31 +217,48 @@ def adminHelp(message):
 
 @bot.message_handler(commands=['airtites'])
 def airtites(message):
-	bot.send_photo(message.chat.id,InputFile('Images/airtite.jpg'), reply_to_message_id = message.id)
+
+	#Declare Globals
+	global CONFIG_DATA
+	
+	bot.send_photo(message.chat.id,InputFile('Images/' + CONFIG_DATA['Images']['airtites']), reply_to_message_id = message.id)
 
 @bot.message_handler(commands=['buyback'])
 def buyback(message):
-	bot.send_photo(message.chat.id,InputFile('Images/buyback.jpg'), reply_to_message_id = message.id)
+
+	#Declare Globals
+	global CONFIG_DATA
+	
+	bot.send_photo(message.chat.id,InputFile('Images/' + CONFIG_DATA['Images']['buyback']), reply_to_message_id = message.id)
 
 @bot.message_handler(commands=['payments'])
 def payments(message):
 
-	bot.send_photo(message.chat.id,InputFile('Images/payments.jpg'), reply_to_message_id = message.id)
+	#Declare Globals
+	global CONFIG_DATA
+	
+	bot.send_photo(message.chat.id,InputFile('Images/' + CONFIG_DATA['Images']['payments']), reply_to_message_id = message.id)
 
 @bot.message_handler(commands=['policy'])
 def policy(message):
 
-	bot.send_photo(message.chat.id,InputFile('Images/policy.jpg'), reply_to_message_id = message.id)
+	bot.send_photo(message.chat.id,InputFile('Images/' + CONFIG_DATA['Images']['policy']), reply_to_message_id = message.id)
 
 @bot.message_handler(commands=['shipping'])
 def shipping(message):
 
-	bot.send_photo(message.chat.id,InputFile('Images/shipping.jpg'), reply_to_message_id = message.id)
+	#Declare Globals
+	global CONFIG_DATA
+	
+	bot.send_photo(message.chat.id,InputFile('Images/' + CONFIG_DATA['Images']['shipping']), reply_to_message_id = message.id)
 
 @bot.message_handler(commands=['team'])
 def team(message):
 
-	bot.send_photo(message.chat.id,InputFile('Images/info.jpg'), reply_to_message_id = message.id)
+	#Declare Globals
+	global CONFIG_DATA
+	
+	bot.send_photo(message.chat.id,InputFile('Images/' + CONFIG_DATA['Images']['team']), reply_to_message_id = message.id)
 
 @bot.message_handler(commands=['welcome'])
 def welcome(message):
