@@ -3,6 +3,8 @@ from datetime import datetime
 import json
 import re
 import requests
+import signal
+import sys
 import telebot
 from telebot.types import InputFile
 #Declare Globals
@@ -167,6 +169,8 @@ def getBins(message):
 	f.close()
 	
 	bot.send_message(message.from_user.id,'Success! Output file location: ' + filename)
+	bot.send_document(message.chat.id,InputFile(filename), reply_to_message_id = message.id)
+
 
 @bot.message_handler(commands=['reloadConfig'])
 def reloadConfig(message):
@@ -326,6 +330,33 @@ def debugGetBins(message):
 def getreplyid(message):
 	print(message.reply_to_message.id)
 
-#Listen for Commands
-bot.polling()
+@bot.message_handler(commands=['except'])
+def excepts(message):
+	raise Exception
 
+def polling():
+	global BIN_LOG
+	#Listen for Commands
+	try:
+		bot.polling()
+	except Exception as e:
+		if len(BIN_LOG) > 0:
+			#Write to csv
+			now = datetime.now().strftime("%d%m%Y_%H%M%S")
+			filename = 'Logs/' + now + '.csv'
+			f = open(filename,'x')
+			for entry in BIN_LOG:
+				f.write(entry + '\n')
+			f.close()
+			for id in CONFIG_DATA['emergency_contacts']:
+				bot.send_message(id,'Crash Detected! Output file location: ' + filename)
+				bot.send_document(id,InputFile(filename))
+			print("Crash Handler: Dumped bin log to file {}".format(filename))
+			BIN_LOG = []
+		now = datetime.now().strftime("%m/%d/%Y %H:%M:%S")
+		print("Exception: {} @ {}".format(e,now))
+		polling()
+signal.signal(signal.SIGINT, signal.default_int_handler)
+polling()
+		
+		

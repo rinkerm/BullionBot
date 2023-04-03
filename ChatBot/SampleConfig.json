@@ -1,5 +1,15 @@
 {
 	"api_key":"1111111111:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
 	"whitelist":[111111111],
-	"welcome_message":2
+	"emergency_contacts":[111111111],
+	"Images":
+		{
+		"airtites":"airtites.jpg",
+		"buyback":"buyback.jpg",
+		"payments":"payments.jpg",
+		"policy":"policy.jpg",
+		"shipping":"shipping.jpg",
+		"team":"info.jpg"
+		},
+		"welcome_message":2
 }
